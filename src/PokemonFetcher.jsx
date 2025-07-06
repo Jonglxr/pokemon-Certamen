@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import './PokemonFetcher.css';
 
 const PokemonFetcher = () => {
-  // Estados
-  const [tipos, setTipos] = useState([]);                // Lista de tipos de Pokémon
-  const [tipoSeleccionado, setTipoSeleccionado] = useState('');  // Tipo elegido por el usuario
-  const [cantidadSeleccionada, setCantidadSeleccionada] = useState('10'); // Cantidad a mostrar
-  const [pokemones, setPokemones] = useState([]);         // Lista de Pokémon a renderizar
-  const [cargando, setCargando] = useState(false);        // Indicador de carga
-  const [error, setError] = useState(null);               // Errores
+  const [tipos, setTipos] = useState([]);
+  const [tipoSeleccionado, setTipoSeleccionado] = useState('aleatorio'); // Predeterminado
+  const [cantidadSeleccionada, setCantidadSeleccionada] = useState('10');
+  const [pokemones, setPokemones] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState(null);
+  const [mostrarAleatorio, setMostrarAleatorio] = useState(true);
 
-  // Al montar: obtener lista de tipos
   useEffect(() => {
     const fetchTipos = async () => {
       try {
@@ -26,7 +25,6 @@ const PokemonFetcher = () => {
     fetchTipos();
   }, []);
 
-  // Función para mezclar aleatoriamente un array (Fisher-Yates)
   const shuffleArray = (array) => {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -36,34 +34,54 @@ const PokemonFetcher = () => {
     return arr;
   };
 
-  // Cuando el tipo o la cantidad cambian => recargar la lista de Pokémon
   useEffect(() => {
-    if (!tipoSeleccionado) {
-      setPokemones([]);
-      return;
-    }
-
-    const fetchPokemonesPorTipo = async () => {
+    const fetchPokemones = async () => {
       try {
         setCargando(true);
         setError(null);
+        let cantidad = cantidadSeleccionada === 'todos' ? 30 : parseInt(cantidadSeleccionada, 10);
+        const fetchedPokemones = [];
+        const ids = new Set();
 
-        // Obtener todos los Pokémon de ese tipo
+        if (tipoSeleccionado === 'aleatorio') {
+          while (ids.size < cantidad) {
+            const randomId = Math.floor(Math.random() * 898) + 1;
+            ids.add(randomId);
+          }
+
+          for (const id of ids) {
+            const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}/`);
+            const data = await res.json();
+            fetchedPokemones.push({
+              id: data.id,
+              nombre: data.name,
+              imagen: data.sprites.front_default,
+              tipos: data.types.map((t) => t.type.name),
+            });
+          }
+
+          setPokemones(fetchedPokemones);
+          setMostrarAleatorio(true);
+          return;
+        }
+
+        if (!tipoSeleccionado) {
+          setMostrarAleatorio(true);
+          return;
+        }
+
         const response = await fetch(`https://pokeapi.co/api/v2/type/${tipoSeleccionado}/`);
         if (!response.ok) throw new Error('Error al cargar los Pokémon de este tipo');
         const data = await response.json();
 
         let listaPokemon = data.pokemon;
 
-        // Si la cantidad es "todos", mezclamos aleatoriamente
         if (cantidadSeleccionada === 'todos') {
           listaPokemon = shuffleArray(listaPokemon);
         } else {
-          // Si no, limitamos a la cantidad seleccionada
-          listaPokemon = listaPokemon.slice(0, parseInt(cantidadSeleccionada, 10));
+          listaPokemon = listaPokemon.slice(0, cantidad);
         }
 
-        // Obtener detalles de cada Pokémon para imagen/nombre/tipos
         const detallesPromises = listaPokemon.map(async (pokeEntry) => {
           const res = await fetch(pokeEntry.pokemon.url);
           const pokeData = await res.json();
@@ -77,6 +95,7 @@ const PokemonFetcher = () => {
 
         const detalles = await Promise.all(detallesPromises);
         setPokemones(detalles);
+        setMostrarAleatorio(false);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -84,14 +103,20 @@ const PokemonFetcher = () => {
       }
     };
 
-    fetchPokemonesPorTipo();
-  }, [tipoSeleccionado, cantidadSeleccionada]); // <-- Dependencias
+    fetchPokemones();
+  }, [tipoSeleccionado, cantidadSeleccionada]);
 
   return (
     <div className="pokemon-container">
-      <h2>Buscador de Pokémon por Tipo</h2>
+      <h2>
+        {tipoSeleccionado === 'aleatorio'
+          ? 'Pokémon aleatorios'
+          : tipoSeleccionado
+          ? `Pokémon tipo ${tipoSeleccionado}`
+          : 'Conoce a tus Pokémon'}
+      </h2>
 
-      {/* Selector de tipo */}
+      {/* Controles */}
       <div className="buscador">
         <label htmlFor="tipoSelect">Selecciona un tipo: </label>
         <select
@@ -99,6 +124,7 @@ const PokemonFetcher = () => {
           value={tipoSeleccionado}
           onChange={(e) => setTipoSeleccionado(e.target.value)}
         >
+          <option value="aleatorio">Aleatorio</option>
           <option value="">-- Elige un tipo --</option>
           {tipos.map((tipo) => (
             <option key={tipo.name} value={tipo.name}>
@@ -108,7 +134,6 @@ const PokemonFetcher = () => {
         </select>
       </div>
 
-      {/* Selector de cantidad */}
       <div className="buscador">
         <label htmlFor="cantidadSelect">Cantidad de Pokémon: </label>
         <select
@@ -119,20 +144,16 @@ const PokemonFetcher = () => {
           <option value="6">6</option>
           <option value="10">10</option>
           <option value="20">20</option>
-          <option value="todos">Todos (aleatorio)</option>
+          <option value="todos">Todos (máx 30 aleatorios)</option>
         </select>
       </div>
 
-      {/* Estado de carga o error */}
+      {/* Estado de carga/error */}
       {cargando && <div className="cargando">Cargando Pokémon...</div>}
       {error && <div className="error">Error: {error}</div>}
 
-      {/* Lista de Pokémon */}
+      {/* Lista */}
       <div className="pokemon-list">
-        {pokemones.length === 0 && !cargando && !error && (
-          <p>Selecciona un tipo para ver sus Pokémon.</p>
-        )}
-
         {pokemones.map((pokemon) => (
           <div key={pokemon.id} className="pokemon-card">
             <h3>{pokemon.nombre.charAt(0).toUpperCase() + pokemon.nombre.slice(1)}</h3>
