@@ -26,6 +26,16 @@ const PokemonFetcher = () => {
     fetchTipos();
   }, []);
 
+  // Función para mezclar aleatoriamente un array (Fisher-Yates)
+  const shuffleArray = (array) => {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+
   // Cuando el tipo o la cantidad cambian => recargar la lista de Pokémon
   useEffect(() => {
     if (!tipoSeleccionado) {
@@ -45,8 +55,11 @@ const PokemonFetcher = () => {
 
         let listaPokemon = data.pokemon;
 
-        // Aplicar filtro de cantidad seleccionada
-        if (cantidadSeleccionada !== 'todos') {
+        // Si la cantidad es "todos", mezclamos aleatoriamente
+        if (cantidadSeleccionada === 'todos') {
+          listaPokemon = shuffleArray(listaPokemon);
+        } else {
+          // Si no, limitamos a la cantidad seleccionada
           listaPokemon = listaPokemon.slice(0, parseInt(cantidadSeleccionada, 10));
         }
 
@@ -106,7 +119,7 @@ const PokemonFetcher = () => {
           <option value="6">6</option>
           <option value="10">10</option>
           <option value="20">20</option>
-          <option value="todos">Todos</option>
+          <option value="todos">Todos (aleatorio)</option>
         </select>
       </div>
 
